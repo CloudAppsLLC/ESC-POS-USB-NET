@@ -42,9 +42,8 @@ namespace ESC_POS_USB_NET.EpsonCommands
        
         }
 
-        byte[] IImage.Print(Bitmap image)
+        byte[] IImage.Print(BitmapData data)
         {
-            var data = GetBitmapData(image);
             BitArray dots = data.Dots;
             byte[] width = BitConverter.GetBytes(data.Width);
 

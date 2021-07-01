@@ -1,4 +1,5 @@
 ﻿using ESC_POS_USB_NET.Enums;
+using ESC_POS_USB_NET.EpsonCommands;
 using System.Drawing;
 
 namespace ESC_POS_USB_NET.Interfaces.Printer
@@ -38,7 +39,7 @@ namespace ESC_POS_USB_NET.Interfaces.Printer
         void FullPaperCut();
         void PartialPaperCut();
         void OpenDrawer();
-        void Image(Bitmap image);
+        void Image(BitmapData image);
         void QrCode(string qrData);
         void QrCode(string qrData, QrCodeSize qrCodeSize);
         void Code128(string code, Positions positions);
