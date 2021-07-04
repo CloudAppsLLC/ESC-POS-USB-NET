@@ -10,106 +10,138 @@ namespace ESC_POS_USB_NET.EpsonCommands
     {
         private static BitmapData GetBitmapData(Bitmap bmp)
         {
-  
-                var threshold = 127;
-                var index = 0;
-                double multiplier = 576; // this depends on your printer model.
-                double scale = (double)(multiplier / (double)bmp.Width);
-                int xheight = (int)(bmp.Height * scale);
-                int xwidth = (int)(bmp.Width * scale);
-                var dimensions = xwidth * xheight;
-                var dots = new BitArray(dimensions);
 
-                for (var y = 0; y < xheight; y++)
-                {
-                    for (var x = 0; x < xwidth; x++)
-                    {
-                        var _x = (int)(x / scale);
-                        var _y = (int)(y / scale);
-                        var color = bmp.GetPixel(_x, _y);
-                        var luminance = (int)(color.R * 0.3 + color.G * 0.59 + color.B * 0.11);
-                        dots[index] = (luminance < threshold);
-                        index++;
-                    }
-                }
+            var threshold = 127;
+            var index = 0;
+            double multiplier = 576; // this depends on your printer model.
+            double scale = (double)(multiplier / (double)bmp.Width);
+            int xheight = (int)(bmp.Height * scale);
+            int xwidth = (int)(bmp.Width * scale);
+            var dimensions = xwidth * xheight;
+            var dots = new BitArray(dimensions);
 
-                return new BitmapData()
-                {
-                    Dots = dots,
-                    Height = (int)(bmp.Height * scale),
-                    Width = (int)(bmp.Width * scale)
-                };
-       
-        }
-
-        byte[] IImage.Print(BitmapData data)
-        {
-            BitArray dots = data.Dots;
-            byte[] width = BitConverter.GetBytes(data.Width);
-
-            int offset = 0;
-            MemoryStream stream = new MemoryStream();
-            BinaryWriter bw = new BinaryWriter(stream);
-
-            bw.Write((char)0x1B);
-            bw.Write('@');
-
-            bw.Write((char)0x1B);
-            bw.Write('3');
-            bw.Write((byte)24);
-
-            while (offset < data.Height)
+            for (var y = 0; y < xheight; y++)
             {
-                bw.Write((char)0x1B);
-                bw.Write('*');         // bit-image mode
-                bw.Write((byte)33);    // 24-dot double-density
-                bw.Write(width[0]);  // width low byte
-                bw.Write(width[1]);  // width high byte
-
-                for (int x = 0; x < data.Width; ++x)
+                for (var x = 0; x < xwidth; x++)
                 {
-                    for (int k = 0; k < 3; ++k)
-                    {
-                        byte slice = 0;
-                        for (int b = 0; b < 8; ++b)
-                        {
-                            int y = (((offset / 8) + k) * 8) + b;
-                            // Calculate the location of the pixel we want in the bit array.
-                            // It'll be at (y * width) + x.
-                            int i = (y * data.Width) + x;
-
-                            // If the image is shorter than 24 dots, pad with zero.
-                            bool v = false;
-                            if (i < dots.Length)
-                            {
-                                v = dots[i];
-                            }
-                            slice |= (byte)((v ? 1 : 0) << (7 - b));
-                        }
-
-                        bw.Write(slice);
-                    }
+                    var _x = (int)(x / scale);
+                    var _y = (int)(y / scale);
+                    var color = bmp.GetPixel(_x, _y);
+                    var luminance = (int)(color.R * 0.3 + color.G * 0.59 + color.B * 0.11);
+                    dots[index] = (luminance < threshold);
+                    index++;
                 }
-                offset += 24;
-                bw.Write((char)0x0A);
             }
-            // Restore the line spacing to the default of 30 dots.
-            bw.Write((char)0x1B);
-            bw.Write('3');
-            bw.Write((byte)30);
 
-            bw.Flush();
-            byte[] bytes = stream.ToArray();
-            bw.Dispose();
-            return bytes;
+            return new BitmapData()
+            {
+                Dots = dots,
+                Height = (int)(bmp.Height * scale),
+                Width = (int)(bmp.Width * scale)
+            };
+
         }
-    }
 
-    public class BitmapData
-    {
-        public BitArray Dots { get; set; }
-        public int Height { get; set; }
-        public int Width { get; set; }
+        private byte[] GetImageHeader(int commandLength)
+        {
+            byte[] lengths = new byte[4];
+            int i = 0;
+            while (commandLength > 0)
+            {
+                lengths[i] = (byte)(commandLength & 0xFF);
+                commandLength >>= 8;
+                i++;
+            }
+
+            if (i >= 3)
+            {
+                return new byte[] { Cmd.GS, Images.ImageCmd8, Images.ImageCmdL, lengths[0], lengths[1], lengths[2], lengths[3] };
+            }
+            else
+            {
+                return new byte[] { Cmd.GS, Images.ImageCmdParen, Images.ImageCmdL, lengths[0], lengths[1] };
+            }
+        }
+
+        byte[] IImage.Print(byte[] image, int maxWidth = -1, bool isLegacy = false, int color = 1)
+        {
+            ByteArrayBuilder imageCommand = new ByteArrayBuilder();
+
+            byte colorByte;
+            switch (color)
+            {
+                case 2:
+                    colorByte = 0x32;
+                    break;
+                case 3:
+                    colorByte = 0x33;
+                    break;
+                default:
+                    colorByte = 0x31;
+                    break;
+            }
+
+            int width;
+            int height;
+            byte[] imageData;
+            using (var img = SixLabors.ImageSharp.Image.Load(image))
+            {
+                imageData = img.ToSingleBitPixelByteArray(maxWidth: maxWidth == -1 ? (int?)null : maxWidth);
+                height = img.Height;
+                width = img.Width;
+            }
+
+            byte heightL = (byte)height;
+            byte heightH = (byte)(height >> 8);
+
+            if (isLegacy)
+            {
+                var byteWidth = (width + 7 & -8) / 8;
+                byte widthL = (byte)byteWidth;
+                byte widthH = (byte)(byteWidth >> 8);
+                imageCommand.Append(new byte[] { Cmd.GS, Images.ImageCmdLegacy, 0x30, 0x00, widthL, widthH, heightL, heightH });
+            }
+            else
+            {
+                byte widthL = (byte)width;
+                byte widthH = (byte)(width >> 8);
+                imageCommand.Append(new byte[] { 0x30, 0x70, 0x30, 0x01, 0x01, colorByte, widthL, widthH, heightL, heightH });
+            }
+
+            imageCommand.Append(imageData);
+
+            // Load image to print buffer
+            ByteArrayBuilder response = new ByteArrayBuilder();
+            byte[] imageCommandBytes = imageCommand.ToArray();
+            if (!isLegacy)
+            {
+                response.Append(GetImageHeader(imageCommandBytes.Length));
+            }
+
+            response.Append(imageCommandBytes);
+            return response.ToArray();
+        }
+
+        public class BitmapData
+        {
+            public BitArray Dots { get; set; }
+            public int Height { get; set; }
+            public int Width { get; set; }
+        }
+
+        public static class Cmd
+        {
+            public static readonly byte ESC = 0x1B;
+            public static readonly byte GS = 0x1D;
+        }
+
+        public static class Images
+        {
+            public static readonly byte ImageCmdParen = 0x28;
+            public static readonly byte ImageCmdLegacy = 0x76;
+            public static readonly byte ImageCmd8 = 0x38;
+            public static readonly byte ImageCmdL = 0x4C;
+        }
     }
 }
 

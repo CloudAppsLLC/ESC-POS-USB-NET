@@ -39,7 +39,7 @@ namespace ESC_POS_USB_NET.Interfaces.Printer
         void FullPaperCut();
         void PartialPaperCut();
         void OpenDrawer();
-        void Image(BitmapData image);
+        void Image(byte[] image, int maxWidth, bool isLegacy, int color);
         void QrCode(string qrData);
         void QrCode(string qrData, QrCodeSize qrCodeSize);
         void Code128(string code, Positions positions);
