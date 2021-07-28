@@ -284,6 +284,17 @@ namespace ESC_POS_USB_NET.Printer
             Append(_command.BarCode.Ean13(code,  printString));
         }
 
+        public void PrintBarcode(BarcodeType type, string barcode, int height, BarcodeCode code = BarcodeCode.CODE_B)
+        {
+            Append(_command.BarCode.SetBarcodeHeightInDots(height));
+            Append(_command.BarCode.PrintBarcode(type, barcode, code));
+        }
+
+        public void SetBarcodeHeightInDots(int height)
+        {
+            Append(_command.BarCode.SetBarcodeHeightInDots(height));
+        }
+
         public void InitializePrint()
         {
             RawPrinterHelper.SendBytesToPrinter(_printerName, _command.InitializePrint.Initialize());

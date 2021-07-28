@@ -45,6 +45,8 @@ namespace ESC_POS_USB_NET.Interfaces.Printer
         void Code128(string code, Positions positions);
         void Code39(string code, Positions positions);
         void Ean13(string code, Positions positions);
+        void PrintBarcode(BarcodeType type, string barcode, int height, BarcodeCode code = BarcodeCode.CODE_B);
+        void SetBarcodeHeightInDots(int height);
         void InitializePrint();
     }
 }
